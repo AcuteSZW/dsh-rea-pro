@@ -67,20 +67,36 @@ const headerOf = (request, name) => {
   return Array.isArray(value) ? (value[0] ?? '') : (value ?? '')
 }
 
-/** Same-origin fence: a page on another site must not flip a local MCP server. */
-const sameOrigin = (request) => {
-  if (headerOf(request, 'sec-fetch-site').toLowerCase() === 'cross-site') return false
-  const origin = headerOf(request, 'origin').trim()
-  if (origin === 'null') return false
-  if (origin === '') return true
-  let originHost
+/** Lowercased media type without parameters, or '' when the header is absent. */
+const mediaType = (request) => {
+  const value = headerOf(request, 'content-type')
+  return value.split(';')[0].trim().toLowerCase()
+}
+
+/** Nothing here needs more than this; a real toggle body is under 100 bytes. */
+const MAX_BODY_BYTES = 2048
+
+/**
+ * Admission for the two local routes. `webServer`'s exact routes bypass the
+ * Connection fence, and comparing Origin's host to the Host header is not
+ * enough: under DNS rebinding both are the attacker's name, so that check
+ * passes while a hostile page reaches a loopback server. Ask the Connection
+ * service instead — it applies the Host/Origin fence and then requires a
+ * request that carries this session's authenticated browser cookie.
+ */
+const refused = (scope, request, response) => {
+  let rejection
   try {
-    originHost = new URL(origin).host
+    rejection = scope.connection.requestRejection(request)
   } catch {
-    return false
+    rejection = 403
   }
-  const host = headerOf(request, 'host').trim()
-  return host !== '' && originHost.toLowerCase() === host.toLowerCase()
+  if (rejection === undefined) return false
+  sendJson(response, rejection, {
+    ok: false,
+    error: rejection === 401 ? 'not authenticated' : 'request refused',
+  })
+  return true
 }
 
 const sendJson = (response, status, payload) => {
@@ -91,17 +107,29 @@ const sendJson = (response, status, payload) => {
   response.end(JSON.stringify(payload))
 }
 
-const readJson = (request) => new Promise((resolve) => {
+const readJson = (request, limit = MAX_BODY_BYTES) => new Promise((resolve) => {
   let text = ''
-  request.on('data', (chunk) => { text += chunk })
+  let tooLarge = false
+  request.on('data', (chunk) => {
+    if (tooLarge) return
+    text += chunk
+    if (text.length > limit) {
+      tooLarge = true
+      text = ''
+    }
+  })
   request.on('end', () => {
+    if (tooLarge) {
+      resolve({ invalid: 'too large' })
+      return
+    }
     try {
       resolve(JSON.parse(text === '' ? '{}' : text))
     } catch {
-      resolve({})
+      resolve({ invalid: 'not json' })
     }
   })
-  request.on('error', () => resolve({}))
+  request.on('error', () => resolve({ invalid: 'stream error' }))
 })
 
 /** Persisted switch state; an unreadable file means "on", which is the pre-switch behaviour. */
@@ -210,12 +238,9 @@ export function apply(ctx, config = {}) {
     unmount()
   })
 
-  ctx.inject(['webServer'], (scope) => {
+  ctx.inject(['webServer', 'connection'], (scope) => {
     const status = async (request, response) => {
-      if (!sameOrigin(request)) {
-        sendJson(response, 403, { ok: false, error: 'cross-origin request refused' })
-        return
-      }
+      if (refused(scope, request, response)) return
       if (located === undefined) {
         sendJson(response, 200, { ok: false, error: lastError })
         return
@@ -233,11 +258,18 @@ export function apply(ctx, config = {}) {
     }
 
     const toggle = async (request, response) => {
-      if (!sameOrigin(request)) {
-        sendJson(response, 403, { ok: false, error: 'cross-origin request refused' })
+      if (refused(scope, request, response)) return
+      // A cross-site page cannot send this content type without a CORS
+      // preflight, which the exact route never answers.
+      if (mediaType(request) !== 'application/json') {
+        sendJson(response, 415, { ok: false, error: 'expected application/json' })
         return
       }
       const body = await readJson(request)
+      if (body.invalid !== undefined) {
+        sendJson(response, 400, { ok: false, error: body.invalid })
+        return
+      }
       const next = body.enabled === true
       try {
         if (next) mount()

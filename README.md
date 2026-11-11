@@ -27,7 +27,7 @@ dsh plugin --profile web add github:AcuteSZW/dsh-rea-pro
 ## 依赖
 
 - DSH `>= 0.2.1`，且 profile 里挂了 `@deepseek-ai/dsh-web-app`（`mcp-manager` 由它提供）。
-- [rea-agents](https://www.npmjs.com/package/rea-agents) `^6.8.0`，作为本插件的依赖自动安装，不需要单独部署 REA 仓库。
+- [rea-agents](https://www.npmjs.com/package/rea-agents) `^6.8.0`：**第三方 npm 包**，作为本插件的依赖自动安装，不需要单独部署 REA 仓库。会话里那些工具就是它提供的（npm 发行版 `6.8.0` 的目录是 229 个工具），插件只负责把它挂进 DSH。
 
 插件不安装或升级 Node、npm、分析引擎；REA 自己的 provider（Ghidra / IDA / JADX / Kuna 等）按 REA 文档配置，插件不代劳。
 
@@ -37,10 +37,24 @@ chip 显示三态：`REA 开`、`REA 关`、`REA …`（切换进行中）。关
 
 REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeoutMs`）。预算太短时 DSH 会把该服务器记成"cleanup 未完成"，之后所有重新挂载都会被拒绝——所以这个值不要调小。
 
-状态接口（同源，仅本机页面可用）：
+状态文件不存在时**按"开"处理**：装完第一次启动就会把 REA 的工具挂进会话，不需要先点开关。想要装上就先不挂，可以在第一次启动前手动写 `~/.dsh/rea-mcp-state.json` 为 `{"enabled": false}`，或者装完立刻点一下 chip。
+
+状态接口（仅本机已认证的 Harness 页面可用）：
 
 - `GET /dsh-rea/status` → `{ ok, enabled, mounted, serverName, script, server?, error? }`，`server` 是 DSH 侧该服务器的实时状态（`state` 为 `connected` 时带 `toolCount`）
-- `POST /dsh-rea/toggle`，body `{ "enabled": true|false }`
+- `POST /dsh-rea/toggle`，body `{ "enabled": true|false }`，要求 `Content-Type: application/json`
+
+两条路由的准入交给 DSH 的 Connection 服务（`connection.requestRejection`）：先过 Host/Origin 围栏，再要求请求带上本会话认证过的浏览器 Cookie。这样即使有站点把自己的域名解析到 `127.0.0.1`（DNS 重绑定），它既拿不到围栏放行，也拿不到 Cookie。
+
+## 和别的 REA 插件共存
+
+市场上还有其它接入 REA 的插件（例如 `czcdr/dsh-plugin-rea` 注册的服务器名是 `rea`，工具名形如 `mcp__rea__*`）。两个插件同装、且服务器名都取默认 `rea` 时，后装的会跟前一个抢同一个名字。本插件的服务器名可配，在 `cordis.patch.yml` 里改 `serverName` 即可：
+
+```yaml
+- name: dsh-rea-pro
+  config:
+    serverName: rea-pro   # 工具名随之变成 mcp__rea-pro__*
+```
 
 ## 发版
 
