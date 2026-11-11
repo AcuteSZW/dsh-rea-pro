@@ -10,7 +10,13 @@ English: mounts [REA](https://github.com/morluto/rea)'s MCP server in DeepSeek H
 dsh plugin --profile web add dsh-rea-pro
 ```
 
-也可以在产品界面里装：**插件 → 安装**，来源填 `dsh-rea-pro`。装完重启 Harness 一次，工具条上会出现 `● REA 开`。
+包还没发到 npm 之前，也可以直接从 GitHub 装：
+
+```sh
+dsh plugin --profile web add github:AcuteSZW/dsh-rea-pro
+```
+
+两种装法等价：装完重启 Harness 一次，工具条上会出现 `● REA 开`。也可以在产品界面里装：**插件 → 安装**，来源填包名或仓库地址。
 
 ## 它能做什么
 
@@ -40,6 +46,8 @@ REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeou
 
 - chip 显示 `REA ?`：读不到状态。先确认插件已加载（**插件 → 已安装**里有 `dsh-rea-pro`），再看 Harness 启动日志。
 - chip 能点但工具没出现：多半是 `rea-agents` 没装进 profile，或 REA 自身启动失败；用 REA 的 `doctor` 检查（`npx rea-agents doctor`）。
+- `pnpm install` 以 `ERR_PNPM_IGNORED_BUILDS` 退出、提示 `Ignored build scripts: frida`：这是 pnpm 拦下了 REA 依赖里 frida 的安装脚本，包本身已经装好、插件可用。要让 frida 相关能力也完整，在 profile 目录跑 `pnpm approve-builds` 选中 frida（或在 `pnpm-workspace.yaml` 的 `allowBuilds` 里加 `frida: true`）后重装、重启。
+- 工具数量和期望不一致：npm 版 `rea-agents` 的目录是 229 个工具（`doctor` 里的 `mcp_tools`）；用自己仓库完整构建出来的副本可能更多。插件只负责挂载，工具集由 REA 决定。
 - Windows 上 REA 报缺少原生模块：`rea-agents` 的发行包已带 Windows 原生件；若被裁剪，按 REA 文档重建 `native/windows`。
 
 ## 卸载
