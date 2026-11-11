@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "REA 逆向分析工具",
+    "description": "把 REA 的逆向工具集接成 DeepSeek Harness 的 MCP 工具，并在输入框工具条上提供一个开关，会话不需要时可一键关闭。"
+  }
+}

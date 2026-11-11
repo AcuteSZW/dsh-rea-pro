@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "REA Reverse Engineering Tools",
+    "description": "Mounts REA's reverse-engineering toolset as MCP tools in DeepSeek Harness, with a composer chip that switches it off when a session does not need it."
+  }
+}

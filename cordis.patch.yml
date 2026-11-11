@@ -1,0 +1,7 @@
+# REA mounts itself as an MCP server through mcp-manager, resolved from the
+# installed rea-agents package, so this patch carries no machine paths.
+- insert:
+    - id: rea-host-control
+      name: 'dsh-rea-pro'
+      config:
+        serverName: rea
