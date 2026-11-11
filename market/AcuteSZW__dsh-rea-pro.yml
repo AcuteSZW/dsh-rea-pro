@@ -2,5 +2,5 @@ url: https://github.com/AcuteSZW/dsh-rea-pro
 name: AcuteSZW/dsh-rea-pro
 category: tools
 description:
-  en: Mounts REA's reverse-engineering MCP toolset (253 tools) in DeepSeek Harness and puts a composer chip beside the permission pill; switching it off withdraws the tools and terminates the MCP child process, so a session that does not need binary analysis spends no context on them. REA is installed from npm as the plugin's own dependency, and the server, its working directory and the Node interpreter are resolved at runtime, so no machine path is baked in.
-  zh: 把 REA 的逆向工程 MCP 工具集（253 个工具）接进 DeepSeek Harness，并在输入框工具条上加一个开关：关掉时工具全部撤走、MCP 子进程退出，不需要二进制分析的会话就不花这份上下文。REA 由插件自己的 npm 依赖装进来，服务器脚本、工作目录和 node 解释器都在运行时解析，安装包里不含任何本机路径。
+  en: Mounts REA's reverse-engineering MCP toolset (200+ tools) in DeepSeek Harness and puts a composer chip beside the permission pill; switching it off withdraws the tools and terminates the MCP child process, so a session that does not need binary analysis spends no context on them. REA is installed from npm as the plugin's own dependency, and the server, its working directory and the Node interpreter are resolved at runtime, so no machine path is baked in.
+  zh: 把 REA 的逆向工程 MCP 工具集（200+ 个工具）接进 DeepSeek Harness，并在输入框工具条上加一个开关：关掉时工具全部撤走、MCP 子进程退出，不需要二进制分析的会话就不花这份上下文。REA 由插件自己的 npm 依赖装进来，服务器脚本、工作目录和 node 解释器都在运行时解析，安装包里不含任何本机路径。
