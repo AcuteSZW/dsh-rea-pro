@@ -42,6 +42,10 @@ REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeou
 - `GET /dsh-rea/status` → `{ ok, enabled, mounted, serverName, script, server?, error? }`，`server` 是 DSH 侧该服务器的实时状态（`state` 为 `connected` 时带 `toolCount`）
 - `POST /dsh-rea/toggle`，body `{ "enabled": true|false }`
 
+## 发版
+
+改完插件后怎么升版本、发 npm、装回 profile、更新市场条目：见 [RELEASING.md](./RELEASING.md)。
+
 ## 排错
 
 - chip 显示 `REA ?`：读不到状态。先确认插件已加载（**插件 → 已安装**里有 `dsh-rea-pro`），再看 Harness 启动日志。
