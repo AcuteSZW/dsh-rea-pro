@@ -3,7 +3,7 @@
 这份文档记录的是**这台机器上已经跑通一遍的完整流程**，以后改完插件按顺序照做即可。命令里出现的路径都是实际路径，别照抄到别的机器上。
 
 - 插件仓库：`E:\ai-agent\deepseek-harness-tools\rea\dsh-rea-plugin`（它自己就是一个 git 仓库，origin = `https://github.com/AcuteSZW/dsh-rea-pro.git`）
-- npm 包：`dsh-rea-pro`（账号 `lucas-song`，2FA 已开，模式 `auth-and-writes`）
+- npm 包：`dsh-rea-pro`（账号 `lucas-song`，2FA 已开，模式 `auth-and-writes`；发布凭据见第四节：**用 Bypass-2FA 的 Granular Access Token**，浏览器登录留下的 token 会很快过期）
 - 本机 DSH profile：`C:\Users\songzhiwei\.dsh\profiles\web`
 - 市场目录条目：仓库里的 `market/AcuteSZW__dsh-rea-pro.yml`
 
@@ -73,7 +73,37 @@ npm publish --registry=https://registry.npmjs.org
 要点：
 
 - **`--registry=https://registry.npmjs.org` 不能省**。这台机器的默认源是 npmmirror，省了会发到镜像站，官方源上永远看不到。
-- 账号开了 2FA（`auth-and-writes`），发布会提示：
+- **凭据：用 Granular Access Token，不要依赖浏览器登录留下的 token。** 这条是 2026-11-12 实际踩出来的：前一天用 `npm login --auth-type=web` 登录过、也发布成功过，第二天再发就是
+
+  ```
+  npm error code E404
+  npm error 404 Not Found - PUT https://registry.npmjs.org/dsh-rea-pro - Not found
+  ```
+
+  看起来像"包不存在"，其实是**认证失败被伪装成 404**（npm 对已存在的包做 PUT 时，没权限一律回 404 而不是 401/403，避免泄露包是否存在）。真相在 `.npmrc` 那条 token 上——拿它请求 `GET https://registry.npmjs.org/-/whoami` 会直接 401，说明登录产生的会话 token 已经过期，隔一夜就废。
+
+  **判断口诀**：PUT 报 404 而不是 403 → 先怀疑 token 过期，别怀疑包名或权限设置。
+
+  **正确做法（一次性配好，以后发布只敲一条命令）**：
+
+  1. 打开 https://www.npmjs.com/settings/lucas-song/tokens → Generate New Token → **Granular Access Token**
+  2. Packages：`All packages`（或只勾 `dsh-rea-pro`）；Permissions：`Read and write`
+  3. **勾上 `Bypass 2FA`**（不勾的话每次发布仍要 OTP，会报 `E403 ... granular access token with bypass 2fa enabled is required`）
+  4. 把 `.npmrc` 里这一行换成新 token（`npm_` 开头）：
+
+     ```
+     //registry.npmjs.org/:_authToken=npm_xxxxxxxx
+     ```
+
+  5. 验证凭据活着：
+
+     ```cmd
+     npm whoami --registry=https://registry.npmjs.org
+     ```
+
+     返回 `lucas-song` 才算好；401 就是 token 又不行了。
+
+  临时应急（只发这一次、不想配 token）才用浏览器流程：发布会打印
 
   ```
   Authenticate your account at:
@@ -81,9 +111,10 @@ npm publish --registry=https://registry.npmjs.org
   Press ENTER to open in the browser...
   ```
 
-  按回车会打开浏览器，在已登录的账号下确认一次即可。**不要用 `--otp=` 手输验证码**，这种浏览器确认的流程更省事。
+  按回车在浏览器确认即可，**不要用 `--otp=` 手输验证码**。但这条路径拿到的 token 很快过期，别指望它明天还能用。
 - 发布成功的输出是 `+ dsh-rea-pro@<版本>` 加上一句 "Your package is being processed…"。
-- 注意：我的执行环境里 `NPM_CONFIG_USERCONFIG` 被指到了沙箱内的另一份配置，在那里跑 `npm publish` 会报 `ENEEDAUTH`。**发布永远在你自己的 cmd 里做**，不要让我代发。
+- 注意：助手执行环境里的 npm 配置被指到了沙箱内的另一份（`NPM_CONFIG_USERCONFIG`），不带 `--userconfig=C:\Users\songzhiwei\.npmrc` 跑会报 `ENEEDAUTH`。**发布优先在你自己的 cmd 里做**；只有在 `.npmrc` 里放了有效的 Bypass-2FA token 之后，助手才代得动这一步。
+- 发布后 registry 有 CDN 延迟：`dist-tags` 可能还指着旧版本、`versions` 里也还没有新号，此时直接查 `https://registry.npmjs.org/dsh-rea-pro/<版本号>` 这个端点，能拿到就说明已经上架（再等一两分钟 `latest` 才会跟着翻）。
 
 ### 发布后必须验证（别信输出，看 registry）
 
@@ -197,7 +228,8 @@ description:
 - [ ] 本地重启后 `connected`，chip 关→开两轮都通过
 - [ ] `npm version patch`（版本号 + tag）
 - [ ] `git commit`（带 `-c user.name/-c user.email`）、`git push`、`git push origin v<版本>`
-- [ ] 自己在 cmd 里 `npm publish --registry=https://registry.npmjs.org`，浏览器里确认一次 2FA
+- [ ] `npm whoami --registry=https://registry.npmjs.org` 返回 `lucas-song`（401 就先配 Bypass-2FA token，见第四节）
+- [ ] `npm publish --registry=https://registry.npmjs.org`（PUT 报 404 而 whoami 401 → token 过期，不是包没了）
 - [ ] `npm view dsh-rea-pro version` 返回新版本（先看到 `0.0.0-stage` 是正常的，等两分钟）
 - [ ] profile 里 `pnpm install`（遇到 frida / 最小发布年龄按第五节处理）、重启、状态 `connected`
 - [ ] 仓库仍带 `dsh-plugin` topic（偶尔复查一下）
