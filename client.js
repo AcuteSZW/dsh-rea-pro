@@ -11,8 +11,8 @@ window.__ModuleLoader__.load({
 
     const english = (navigator.language || '').toLowerCase().startsWith('en')
     const text = english
-      ? { on: 'REA on', off: 'REA off', busy: 'REA …', unknown: 'REA ?', offHint: 'Click to turn REA MCP off (stop injecting its tools)', onHint: 'Click to turn REA MCP on' }
-      : { on: 'REA 开', off: 'REA 关', busy: 'REA …', unknown: 'REA ?', offHint: '点击关闭 REA MCP（不再向会话注入 REA 工具）', onHint: '点击开启 REA MCP' }
+      ? { on: 'REA on', off: 'REA off', turnOn: 'Click to turn REA MCP on', turnOff: 'Click to turn REA MCP off (stop injecting its tools)' }
+      : { on: 'REA 开', off: 'REA 关', turnOn: '点击开启 REA MCP', turnOff: '点击关闭 REA MCP（不再向会话注入 REA 工具）' }
 
     const request = async (path, body) => {
       const response = await fetch(path, body === undefined
@@ -62,37 +62,41 @@ window.__ModuleLoader__.load({
         event.preventDefault()
         event.stopPropagation()
         if (view.busy || !view.known) return
-        setView(v => ({ ...v, busy: true, note: '' }))
+        const target = !view.enabled
+        // Flip at once: the switch has only two states, so the label must not
+        // sit on the old one while the host settles (unmount can take ~20 s).
+        setView(v => ({ ...v, enabled: target, busy: true, note: '' }))
         try {
-          const payload = await request(TOGGLE_PATH, { enabled: !view.enabled })
+          const payload = await request(TOGGLE_PATH, { enabled: target })
           if (payload.ok !== true) {
-            setView(v => ({ ...v, busy: false, note: payload.error || 'toggle failed' }))
+            setView(v => ({ ...v, enabled: !target, busy: false, note: payload.error || 'toggle failed' }))
             return
           }
           setView(v => ({ ...v, busy: false, note: '' }))
 
-          // The Host settles its registration asynchronously, so the label
-          // follows a fresh read rather than the toggle response.
-          const refreshed = await readStatus(2)
+          // The toggle response already carries the settled state, so the label
+          // flips at once; a follow-up read only reconciles a later failure.
+          if (payload.enabled === true || payload.enabled === false) {
+            setView(v => ({ ...v, enabled: payload.enabled === true, known: true }))
+          }
+          const refreshed = await readStatus(1)
           if (refreshed.ok === true) {
             setView(v => ({ ...v, enabled: refreshed.enabled === true, known: true }))
           }
         } catch (error) {
-          setView(v => ({ ...v, busy: false, note: error.message || String(error) }))
+          setView(v => ({ ...v, enabled: !target, busy: false, note: error.message || String(error) }))
         }
       }
 
-      const label = view.busy
-        ? text.busy
-        : !view.known ? text.unknown : view.enabled ? text.on : text.off
-      const dot = !view.known
-        ? 'var(--dsw-alias-state-warning-primary)'
-        : view.enabled ? 'var(--dsw-alias-brand-primary)' : 'var(--dsw-alias-border-l3)'
+      const label = view.enabled ? text.on : text.off
+      const dot = view.enabled
+        ? 'var(--dsw-alias-brand-primary)'
+        : 'var(--dsw-alias-border-l3)'
 
       return h('button', {
         type: 'button',
         onClick: toggle,
-        title: view.note || (view.enabled ? text.offHint : text.onHint),
+        title: view.note || (view.enabled ? text.turnOff : text.turnOn),
         style: {
           display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 10px',
           borderRadius: 999, border: '1px solid var(--dsw-alias-border-l2)', background: 'transparent',

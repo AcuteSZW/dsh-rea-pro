@@ -1,8 +1,8 @@
 # dsh-rea-pro
 
-REA 的逆向工具集接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（下称 DSH）的插件，并在输入框工具条上提供一个开关。不需要 REA 时点一下关掉，REA 的 MCP 子进程随之退出，工具也不再占用上下文。
+REA 的逆向工具集接入 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（下称 DSH）的插件，并在输入框工具条上提供一个开关。新装默认关闭；需要时点一下开启，关掉后 REA 的 MCP 子进程随之退出，工具也不再占用上下文。
 
-English: mounts [REA](https://github.com/morluto/rea)'s MCP server in DeepSeek Harness and adds a composer chip to switch it off when a session does not need it.
+English: mounts [REA](https://github.com/morluto/rea)'s MCP server in DeepSeek Harness and adds a composer chip to switch it on for the sessions that need it; it starts off after install.
 
 ## 安装
 
@@ -16,7 +16,7 @@ dsh plugin --profile web add dsh-rea-pro
 dsh plugin --profile web add github:AcuteSZW/dsh-rea-pro
 ```
 
-两种装法等价：装完重启 Harness 一次，工具条上会出现 `● REA 开`。也可以在产品界面里装：**插件 → 安装**，来源填包名或仓库地址。
+两种装法等价：装完重启 Harness 一次，工具条上会出现 `● REA 关`。也可以在产品界面里装：**插件 → 安装**，来源填包名或仓库地址。新装默认是关的，要用的时候点一下。
 
 ## 它能做什么
 
@@ -33,11 +33,11 @@ dsh plugin --profile web add github:AcuteSZW/dsh-rea-pro
 
 ## 开关
 
-chip 显示三态：`REA 开`、`REA 关`、`REA …`（切换进行中）。关闭时 Host 侧注销服务器注册，MCP 子进程退出；开启时重新注册并拉起子进程，通常几秒内可用。
+chip 只有两个状态：`REA 开`、`REA 关`。关闭时 Host 侧注销服务器注册，MCP 子进程退出；开启时重新注册并拉起子进程，通常几秒内可用。
 
 REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeoutMs`）。预算太短时 DSH 会把该服务器记成"cleanup 未完成"，之后所有重新挂载都会被拒绝——所以这个值不要调小。
 
-状态文件不存在时**按"开"处理**：装完第一次启动就会把 REA 的工具挂进会话，不需要先点开关。想要装上就先不挂，可以在第一次启动前手动写 `~/.dsh/rea-mcp-state.json` 为 `{"enabled": false}`，或者装完立刻点一下 chip。
+**新装默认关**：状态文件不存在时按"关"处理，装完第一次启动不会把 REA 的工具挂进会话，需要你在 chip 上点一下。点过之后状态存进 `~/.dsh/rea-mcp-state.json`，重启后保持。
 
 状态接口（仅本机已认证的 Harness 页面可用）：
 
@@ -62,7 +62,7 @@ REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeou
 
 ## 排错
 
-- chip 显示 `REA ?`：读不到状态。先确认插件已加载（**插件 → 已安装**里有 `dsh-rea-pro`），再看 Harness 启动日志。
+- chip 点不动（停在 `REA 关`）：读不到状态。先确认插件已加载（**插件 → 已安装**里有 `dsh-rea-pro`），再看 Harness 启动日志。
 - chip 能点但工具没出现：多半是 `rea-agents` 没装进 profile，或 REA 自身启动失败；用 REA 的 `doctor` 检查（`npx rea-agents doctor`）。
 - `pnpm install` 以 `ERR_PNPM_IGNORED_BUILDS` 退出、提示 `Ignored build scripts: frida`：这是 pnpm 拦下了 REA 依赖里 frida 的安装脚本，包本身已经装好、插件可用。要让 frida 相关能力也完整，在 profile 目录跑 `pnpm approve-builds` 选中 frida（或在 `pnpm-workspace.yaml` 的 `allowBuilds` 里加 `frida: true`）后重装、重启。
 - 工具数量和期望不一致：npm 版 `rea-agents` 的目录是 229 个工具（`doctor` 里的 `mcp_tools`）；用自己仓库完整构建出来的副本可能更多。插件只负责挂载，工具集由 REA 决定。

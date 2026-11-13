@@ -109,13 +109,13 @@ const readJson = (request, limit = MAX_BODY_BYTES) => new Promise((resolve) => {
   request.on('error', () => resolve({ invalid: 'stream error' }))
 })
 
-/** Persisted switch state; an unreadable file means "on", which is the pre-switch behaviour. */
+/** Persisted switch state. No file yet means a fresh install: stay off until asked. */
 async function readState() {
   try {
     const parsed = JSON.parse(await readFile(STATE_FILE, 'utf8'))
-    return typeof parsed?.enabled === 'boolean' ? parsed.enabled : true
+    return typeof parsed?.enabled === 'boolean' ? parsed.enabled : false
   } catch {
-    return true
+    return false
   }
 }
 
@@ -128,7 +128,7 @@ export function apply(ctx, config = {}) {
   const serverName = typeof config.serverName === 'string' && config.serverName !== '' ? config.serverName : SERVER_NAME
   const located = locateServer(config)
 
-  let enabled = true
+  let enabled = false
   let dispose = null
   let ready = false
   let lastError = located === undefined ? `${PACKAGE} 未安装：请先安装 rea-agents（npm i rea-agents）` : ''

@@ -208,7 +208,7 @@ http://127.0.0.1:3080/dsh-rea/status?token=<token>
 
 ### 描述怎么写（维护者当面审过）
 
-- 讲清**做什么**，再**披露默认行为**。上游 2026-11-12 的提交 `2e469a87` 原话是 "describe merged entries by what they do and disclose defaults"。本条目现在写明「装好即默认开启；关掉后工具撤走、MCP 子进程退出」。
+- 讲清**做什么**，再**披露默认行为**。上游 2026-11-12 的提交 `2e469a87` 原话是 "describe merged entries by what they do and disclose defaults"。本条目现在写明「装好默认关闭；点开才挂载，关掉后工具撤走、MCP 子进程退出」。
 - **不要写具体工具数量**。原文写明 `if a description claims "46 tools", someone counts them`，审核会真去数（发行版实测 229，不是 253）。
 
 ### 首次收录步骤（已完成，仅留档）
@@ -237,8 +237,8 @@ url: https://github.com/AcuteSZW/dsh-rea-pro
 name: AcuteSZW/dsh-rea-pro
 category: tools
 description:
-  en: Mounts REA's reverse-engineering MCP toolset in DeepSeek Harness behind a composer chip; it is on by default once installed, and switching it off withdraws the tools and stops the MCP child process so idle sessions pay no context for them.
-  zh: 把 REA 的逆向工程 MCP 工具集接进 DeepSeek Harness，输入框工具条上一个开关，装好即默认开启；关掉后工具全部撤走、MCP 子进程退出，不需要它的会话就不花这份上下文。
+  en: Mounts REA's reverse-engineering MCP toolset in DeepSeek Harness behind a composer chip; it starts off after install, and switching it on registers the server while switching it off withdraws the tools and stops the MCP child process so idle sessions pay no context for them.
+  zh: 把 REA 的逆向工程 MCP 工具集接进 DeepSeek Harness，输入框工具条上一个开关，装好默认关闭；点开即挂载，关掉后工具全部撤走、MCP 子进程退出，不需要它的会话就不花这份上下文。
 ```
 
 ### 三个硬门槛（会卡住 PR）
