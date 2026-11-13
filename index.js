@@ -76,29 +76,6 @@ const mediaType = (request) => {
 /** Nothing here needs more than this; a real toggle body is under 100 bytes. */
 const MAX_BODY_BYTES = 2048
 
-/**
- * Admission for the two local routes. `webServer`'s exact routes bypass the
- * Connection fence, and comparing Origin's host to the Host header is not
- * enough: under DNS rebinding both are the attacker's name, so that check
- * passes while a hostile page reaches a loopback server. Ask the Connection
- * service instead — it applies the Host/Origin fence and then requires a
- * request that carries this session's authenticated browser cookie.
- */
-const refused = (scope, request, response) => {
-  let rejection
-  try {
-    rejection = scope.connection.requestRejection(request)
-  } catch {
-    rejection = 403
-  }
-  if (rejection === undefined) return false
-  sendJson(response, rejection, {
-    ok: false,
-    error: rejection === 401 ? 'not authenticated' : 'request refused',
-  })
-  return true
-}
-
 const sendJson = (response, status, payload) => {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -238,9 +215,13 @@ export function apply(ctx, config = {}) {
     unmount()
   })
 
-  ctx.inject(['webServer', 'connection'], (scope) => {
+  // Admission is the WebServer's own job: a route registered without `auth`
+  // defaults to 'required', and the authentication provider answers through the
+  // `webserver/authorize` waterfall — the Host/Origin fence plus this session's
+  // browser cookie. A cross-site page therefore cannot reach either route, and
+  // the plugin has no auth code of its own to drift out of date.
+  ctx.inject(['webServer'], (scope) => {
     const status = async (request, response) => {
-      if (refused(scope, request, response)) return
       if (located === undefined) {
         sendJson(response, 200, { ok: false, error: lastError })
         return
@@ -258,7 +239,6 @@ export function apply(ctx, config = {}) {
     }
 
     const toggle = async (request, response) => {
-      if (refused(scope, request, response)) return
       // A cross-site page cannot send this content type without a CORS
       // preflight, which the exact route never answers.
       if (mediaType(request) !== 'application/json') {
@@ -298,8 +278,8 @@ export function apply(ctx, config = {}) {
     }
 
     const disposers = [
-      scope.webServer.register({ kind: 'exact', path: '/dsh-rea/status', handler: status }),
-      scope.webServer.register({ kind: 'exact', path: '/dsh-rea/toggle', handler: toggle }),
+      scope.webServer.register({ kind: 'exact', path: '/dsh-rea/status', auth: 'required', handler: status }),
+      scope.webServer.register({ kind: 'exact', path: '/dsh-rea/toggle', auth: 'required', handler: toggle }),
     ]
     return () => {
       for (const remove of disposers) {

@@ -1,6 +1,6 @@
 {
   "name": "dsh-rea-pro",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Mount REA's reverse-engineering toolset as MCP tools in DeepSeek Harness, with a composer chip that switches it off when a session does not need it.",
   "type": "module",
   "license": "MIT",
@@ -38,7 +38,7 @@
   },
   "engines": {
     "node": "^22.23.4 || ^24.22.1 || >=26.12.1",
-    "dsh": ">=0.2.1"
+    "dsh": ">=0.2.2-rc.2"
   },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },

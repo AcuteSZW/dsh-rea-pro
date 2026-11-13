@@ -44,7 +44,7 @@ REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeou
 - `GET /dsh-rea/status` → `{ ok, enabled, mounted, serverName, script, server?, error? }`，`server` 是 DSH 侧该服务器的实时状态（`state` 为 `connected` 时带 `toolCount`）
 - `POST /dsh-rea/toggle`，body `{ "enabled": true|false }`，要求 `Content-Type: application/json`
 
-两条路由的准入交给 DSH 的 Connection 服务（`connection.requestRejection`）：先过 Host/Origin 围栏，再要求请求带上本会话认证过的浏览器 Cookie。这样即使有站点把自己的域名解析到 `127.0.0.1`（DNS 重绑定），它既拿不到围栏放行，也拿不到 Cookie。
+两条路由的准入交给 DSH 的 WebServer 认证策略：`register` 不带 `auth` 时默认为 `required`，由 DSH 的认证 Provider 在 `webserver/authorize` 里裁决——先过 Host/Origin 围栏，再要求请求带上本会话认证过的浏览器 Cookie。这样即使有站点把自己的域名解析到 `127.0.0.1`（DNS 重绑定），它既拿不到围栏放行，也拿不到 Cookie。插件自身不实现鉴权。
 
 ## 和别的 REA 插件共存
 
