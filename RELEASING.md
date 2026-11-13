@@ -5,7 +5,19 @@
 - 插件仓库：`E:\ai-agent\deepseek-harness-tools\rea\dsh-rea-plugin`（它自己就是一个 git 仓库，origin = `https://github.com/AcuteSZW/dsh-rea-pro.git`）
 - npm 包：`dsh-rea-pro`（账号 `lucas-song`，2FA 已开，模式 `auth-and-writes`；发布凭据见第四节：**用 Bypass-2FA 的 Granular Access Token**，浏览器登录留下的 token 会很快过期）
 - 本机 DSH profile：`C:\Users\songzhiwei\.dsh\profiles\web`
-- 市场目录条目：仓库里的 `market/AcuteSZW__dsh-rea-pro.yml`
+- 市场目录条目：仓库里的 `market/AcuteSZW__dsh-rea-pro.yml`（**已收录**，见第六节）
+
+---
+
+## 三种更新，先分清
+
+| 你改了什么 | 走哪几步 | 市场条目 |
+|---|---|---|
+| 插件代码 / 行为（修 bug、加能力、改默认值） | 一 → 二 → 三 → 四 → 五 | **不用动**。条目指向仓库，站点自己去 npm 抓新版本号 |
+| 描述 / 分类 / 仓库地址 | 先按上一行走完发布，再走第六节「收录之后改条目」 | 提 PR 改那个 yml |
+| 发错版本，要止损 | 第七节 | 不用动 |
+
+一句话：**日常发版只有一条路——升版本、push、publish、装回 profile 重启。**市场只在文案变了才碰。
 
 ---
 
@@ -60,6 +72,12 @@ git push origin v1.0.1
 2. **仓库报 dubious ownership**，任何 git 命令都可能需要 `-c safe.directory=<仓库绝对路径>`。
 3. **到 github.com 的连接时通时断**，报 `Could not connect` 或 `Connection was reset` 就等一会儿重试，提交已在本地不会丢。
 4. 外层 REA 检出（`...\rea`）已把 `dsh-rea-plugin/` 写进 `.git/info/exclude`，不要在那边误提交。
+
+补充两条：
+
+- **git 可能突然从 PATH 消失**（这台机器发生过一次，`Get-Command git` 无结果）。临时用 GitHub Desktop 自带的：
+  `C:\Users\songzhiwei\AppData\Local\GitHubDesktop\app-3.6.11\resources\app\git\cmd\git.exe`（2.56.1）。版本号目录变了就在 `...\GitHubDesktop\` 下找最新的 `app-*\resources\app\git\cmd\git.exe`。
+- **443 全断时不要硬撑**：`git push` 连续失败就别反复重试，等网络恢复再推；本地提交不会丢。真需要当场落远端，只能走 GitHub 网页/API 手改，属于应急手段，事后必须 `git fetch` + `git reset --hard origin/main` 对齐（发生过一次：本地 `3f0c913` 与远端 `3bbad01f` 内容相同、哈希不同，已对齐）。
 
 ---
 
@@ -132,15 +150,23 @@ npm view dsh-rea-pro version --registry=https://registry.npmjs.org
 
 ```cmd
 cd /d C:\Users\songzhiwei\.dsh\profiles\web
-pnpm install
+pnpm add dsh-rea-pro@1.0.2
 ```
+
+**用 `pnpm add <包>@<版本>`，不要用 `pnpm install`。** 这条是 2026-11-12 撞出来的：`pnpm install` 只按 lockfile 补齐，**不会升级已装的旧版本**，还会把手动覆盖进去的文件回滚成旧版（当时手拷的 1.0.1 被回滚成 1.0.0，`sameOrigin` 又冒出来了）。`pnpm add` 才会真的换版本，同时把 `package.json` 的版本号改掉、往 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 追加一条。
 
 可能出现两件事，都属于已知情况：
 
 1. **`ERR_PNPM_IGNORED_BUILDS: Ignored build scripts: frida`** —— REA 的依赖链里有 `frida` 的安装脚本被 pnpm 挡了。包其实已经装好、插件可用；要完整能力就在 `pnpm-workspace.yaml` 的 `allowBuilds:` 下加 `frida: true` 再装一次（本机已加过）。退出码为 1 时先看是不是这一条，别以为装失败了。
-2. **`minimumReleaseAge` 拦截** —— profile 有"最小发布年龄"策略，刚发的包会被拦。pnpm 一般会自动往 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 里加一条 `dsh-rea-pro@<版本>` 并继续装；如果它变成硬报错，就手动把该版本加进 exclude 列表。
+2. **`minimumReleaseAge` 拦截** —— profile 有"最小发布年龄"策略，刚发的包会被拦。pnpm 一般会自动往 `minimumReleaseAgeExclude` 加一条 `dsh-rea-pro@<版本>` 并继续装；如果它变成硬报错，就手动把该版本加进 exclude 列表。
 
-装完重启 DSH（当前实例是 `pnpm dsh web --no-open`）：
+装完核对磁盘上的确实是新代码（别信输出）：
+
+```cmd
+findstr /C:"requestRejection" "C:\Users\songzhiwei\.dsh\profiles\web\node_modules\dsh-rea-pro\index.js"
+```
+
+再重启 DSH（当前实例是 `pnpm dsh web --no-open`）：
 
 ```cmd
 :: 先杀掉旧实例
@@ -162,31 +188,58 @@ http://127.0.0.1:3080/dsh-rea/status?token=<token>
 
 ## 六、插件市场（awesome-dsh-plugin）
 
+**现状（2026-11-13 起）：已收录。** PR #14788 已合并（merge commit `5fa8e3fc`，合并人 `fkysly`），条目落在上游 `data/plugins/AcuteSZW__dsh-rea-pro.yml`，站点索引已刷新：
+
+- 列表数据：`https://awesome-dsh-plugin.com/plugins.json`
+- 详情页：`https://awesome-dsh-plugin.com/p/AcuteSZW/dsh-rea-pro/`
+
+条目里的 `npm` / `version` / `stars` / `downloads` 一开始是 `null`，站点的回填任务抓到 npm 后会自己填，**不用管，更不要为这个提 PR**。
+
 ### 什么时候需要更新市场条目
 
-只有**描述、分类、仓库地址**变了才需要更新。日常升版本不用动市场，条目指向仓库，市场会自动显示最新版本。
+只有**描述、分类、仓库地址**变了才需要更新。日常升版本不动市场：条目指向仓库，站点自己去 npm 抓最新版本号。
 
-### 编辑条目
+### 收录之后改条目（日常只有这一种）
 
-改仓库里的 `market/AcuteSZW__dsh-rea-pro.yml`，它就是 PR 要提交的文件内容（单行英文/中文描述，句号结尾）：
+1. 在 fork `AcuteSZW/awesome-dsh-plugin` 上**先从上游最新 `main` 拉一条新分支**（名字写清目的，如 `update-dsh-rea-pro-desc`）。
+2. 改 `data/plugins/AcuteSZW__dsh-rea-pro.yml` 里要改的那一两行（英文/中文各一句，句号结尾）。
+3. 提 PR 到上游 `main`，**一个 PR 只改这一个文件**，PR 描述写清「改了什么、为什么改」。
+4. 等 `check` 与 `Submission gate` 双绿。门禁自己会重跑，**失败不要关掉重开 PR**。
+
+### 描述怎么写（维护者当面审过）
+
+- 讲清**做什么**，再**披露默认行为**。上游 2026-11-12 的提交 `2e469a87` 原话是 "describe merged entries by what they do and disclose defaults"。本条目现在写明「装好即默认开启；关掉后工具撤走、MCP 子进程退出」。
+- **不要写具体工具数量**。原文写明 `if a description claims "46 tools", someone counts them`，审核会真去数（发行版实测 229，不是 253）。
+
+### 首次收录步骤（已完成，仅留档）
+
+1. Fork `https://github.com/awesome-dsh-plugin/awesome-dsh-plugin`。
+2. 在 fork 里新增 `data/plugins/AcuteSZW__dsh-rea-pro.yml`，内容同下。
+3. 提 PR 到上游 `main`，只加这一个文件，不要手改 `README.md`（CI 生成）。
+4. PR 描述里写清楚：`dsh.bundle` 已声明、npm 包已发布、自己实测过安装与开关。
+
+### 别踩的坑（都是实际撞过的）
+
+| 坑 | 后果 |
+|---|---|
+| 复用旧分支提 PR（上游已前进） | diff 不再是单文件新增，门禁直接挂（#14117 就是这样废掉的，最后只能换新分支重开 #14788） |
+| 手改 `README.md` / `README.zh.md` | 那是 CI 生成的，会被覆盖 |
+| 同一个文件同时挂两个 PR | 必须关掉一个，并在被关的 PR 里留言说明换到哪条 |
+| 文件名不是 `.yml`、或不在 `data/plugins/` 下 | 被静默跳过，CI 不报错但也不收录 |
+| 描述里写工具数量 | 审核去数，对不上要返工 |
+
+### 当前条目内容（改之前先跟这个对齐）
+
+仓库里的 `market/AcuteSZW__dsh-rea-pro.yml` 就是 PR 要提交的文件，四处应保持一致（插件仓库、fork 分支、上游 `main`）：
 
 ```yaml
 url: https://github.com/AcuteSZW/dsh-rea-pro
 name: AcuteSZW/dsh-rea-pro
 category: tools
 description:
-  en: 一句话英文描述，句号结尾。
-  zh: 一句话中文描述，以句号结尾。
+  en: Mounts REA's reverse-engineering MCP toolset in DeepSeek Harness behind a composer chip; it is on by default once installed, and switching it off withdraws the tools and stops the MCP child process so idle sessions pay no context for them.
+  zh: 把 REA 的逆向工程 MCP 工具集接进 DeepSeek Harness，输入框工具条上一个开关，装好即默认开启；关掉后工具全部撤走、MCP 子进程退出，不需要它的会话就不花这份上下文。
 ```
-
-不要写具体工具数量（比如"229 个工具"）。那边原文写明 `if a description claims "46 tools", someone counts them`，审核会真的去数。
-
-### 提交 PR
-
-1. 打开 `https://github.com/awesome-dsh-plugin/awesome-dsh-plugin`，点 Fork。
-2. 在 fork 仓库新增文件 `data/plugins/AcuteSZW__dsh-rea-pro.yml`，内容同上。
-3. 提 PR 到上游 `main`。**只加这一个文件**，不要手改 `README.md`（那是 CI 生成的）。
-4. PR 描述里写清楚：`dsh.bundle` 已声明、npm 包已发布、自己实测过安装与开关。
 
 ### 三个硬门槛（会卡住 PR）
 
@@ -231,6 +284,6 @@ description:
 - [ ] `npm whoami --registry=https://registry.npmjs.org` 返回 `lucas-song`（401 就先配 Bypass-2FA token，见第四节）
 - [ ] `npm publish --registry=https://registry.npmjs.org`（PUT 报 404 而 whoami 401 → token 过期，不是包没了）
 - [ ] `npm view dsh-rea-pro version` 返回新版本（先看到 `0.0.0-stage` 是正常的，等两分钟）
-- [ ] profile 里 `pnpm install`（遇到 frida / 最小发布年龄按第五节处理）、重启、状态 `connected`
+- [ ] profile 里 `pnpm add dsh-rea-pro@<新版本>`（不是 `pnpm install`；遇到 frida / 最小发布年龄按第五节处理）、重启、状态 `connected`
 - [ ] 仓库仍带 `dsh-plugin` topic（偶尔复查一下）
-- [ ] 只有描述/分类变了才动市场 PR
+- [ ] 只有描述/分类/地址变了才动市场 PR；改条目时从上游最新 `main` 拉新分支，一个 PR 只改那一个 yml
