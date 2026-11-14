@@ -8,11 +8,19 @@
  * on any machine and any install location.
  */
 import { createRequire } from 'node:module'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, appendFileSync } from 'node:fs'
 import { dirname, join, basename, resolve as resolvePath } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+
+const DEBUG_LOG = process.env.DSH_REA_DEBUG === '1' ? join(tmpdir(), 'dsh-rea-debug.log') : undefined
+const debugLog = (...parts) => {
+  if (DEBUG_LOG === undefined) return
+  try {
+    appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${parts.join(' ')}\n`)
+  } catch { /* diagnostics only */ }
+}
 
 const SERVER_NAME = 'rea'
 const PACKAGE = 'rea-agents'
@@ -136,6 +144,7 @@ export function apply(ctx, config = {}) {
   const mount = () => {
     if (dispose !== null || located === undefined) return
     if (!ready) throw new Error('mcpManager 尚未就绪')
+    debugLog('mount', JSON.stringify({ exec: process.execPath, script: located.script, cwd: located.root }))
     dispose = managerRegister({
       transport: 'stdio',
       command: process.execPath,
@@ -154,6 +163,7 @@ export function apply(ctx, config = {}) {
       closeTimeoutMs: 60000,
       reconnect: { enabled: true, initialDelayMs: 1000, maxDelayMs: 30000, maxAttempts: 10 },
     })
+    debugLog('registered', typeof dispose)
   }
 
   const unmount = () => {
@@ -173,8 +183,8 @@ export function apply(ctx, config = {}) {
   const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
 
   /** The switch only reads as on when the server actually reached `connected`. */
-  const CONNECT_BUDGET_MS = 45000
   const READY_BUDGET_MS = 10000
+  const SETTLE_POLL_MS = 4000
 
   const waitForReady = async (budgetMs) => {
     const until = Date.now() + budgetMs
@@ -183,18 +193,43 @@ export function apply(ctx, config = {}) {
   }
 
   /**
-   * Watch the manager's own status until the server settles.
-   * @returns 'connected' | 'failed' | 'timeout'
+   * REA needs ~40 s to reach `connected` on a warm machine (its providers load
+   * before the tool list is served), so the switch cannot wait inline. Instead
+   * the registration is watched in the background: a record the manager marks
+   * `failed` (an unclean close, a spawn error) is withdrawn and the remembered
+   * state goes back to off, while a slow start is simply allowed to finish.
    */
-  const waitForOutcome = async (budgetMs) => {
-    const until = Date.now() + budgetMs
-    while (Date.now() < until) {
-      const state = managerStatus()?.status?.state
-      if (state === 'connected') return 'connected'
-      if (state === 'failed') return 'failed'
-      await sleep(500)
-    }
-    return 'timeout'
+  let watcher
+  const stopWatcher = () => {
+    if (watcher !== undefined) clearInterval(watcher)
+    watcher = undefined
+  }
+  const startWatcher = () => {
+    stopWatcher()
+    watcher = setInterval(() => {
+      if (dispose === null) {
+        stopWatcher()
+        return
+      }
+      const entry = managerStatus()
+      debugLog('watch', JSON.stringify(entry))
+      const state = entry?.status?.state
+      if (state === 'connected') {
+        lastError = ''
+        return
+      }
+      if (state !== 'failed') return
+      const message = explain(entry.status)
+      stopWatcher()
+      void (async () => {
+        try {
+          unmount()
+        } catch { /* the record is dead either way */ }
+        enabled = false
+        lastError = message
+        await writeState(false).catch(() => {})
+      })()
+    }, SETTLE_POLL_MS)
   }
 
   /**
@@ -236,29 +271,20 @@ export function apply(ctx, config = {}) {
       if (!on) return
       try {
         mount()
+        enabled = true
+        lastError = ''
+        startWatcher()
       } catch (error) {
         lastError = friendly(error)
         enabled = false
         await writeState(false)
-        return
       }
-      // A remembered "on" still has to prove it connected: a previous unclean
-      // close leaves the manager unable to mount, and the chip must not claim
-      // the tools are there when they are not.
-      if (await waitForOutcome(CONNECT_BUDGET_MS) === 'connected') {
-        enabled = true
-        lastError = ''
-        return
-      }
-      lastError = explain(managerStatus()?.status)
-      enabled = false
-      unmount()
-      await writeState(false)
     })
   })
 
   // Plugin unload withdraws the server, so its tools leave the context with it.
   ctx.effect(() => () => {
+    stopWatcher()
     unmount()
   })
 
@@ -307,35 +333,22 @@ export function apply(ctx, config = {}) {
           // A page load can land before the inject frame binds the manager.
           if (!await waitForReady(READY_BUDGET_MS)) throw new Error('mcpManager 尚未就绪，稍后重试')
           mount()
-          const outcome = await waitForOutcome(CONNECT_BUDGET_MS)
-          if (outcome !== 'connected') {
-            const message = explain(managerStatus()?.status)
-            // Withdraw the registration so this attempt does not leave a name
-            // behind that a later enable would collide with.
-            unmount()
-            enabled = false
-            await writeState(false)
-            lastError = message
-            sendJson(response, 200, {
-              ok: false,
-              error: message,
-              enabled,
-              mounted: false,
-              outcome: { application: 'failed', enabled },
-            })
-            return
-          }
           enabled = true
           await writeState(true)
           lastError = ''
+          startWatcher()
           sendJson(response, 200, {
             ok: true,
             enabled,
-            mounted: true,
+            // Registered and starting: REA answers `connected` in about 40 s,
+            // and the watcher withdraws it if the manager marks it failed.
+            mounted: connectedState(),
+            registered: true,
             outcome: { application: 'applied', enabled },
           })
           return
         }
+        stopWatcher()
         unmount()
         enabled = false
         await writeState(false)
@@ -348,6 +361,7 @@ export function apply(ctx, config = {}) {
         })
       } catch (error) {
         const message = friendly(error)
+        stopWatcher()
         lastError = message
         enabled = false
         try {

@@ -47,13 +47,36 @@ window.__ModuleLoader__.load({
     function ReaChip() {
       const [view, setView] = React.useState({ enabled: false, known: false, busy: false, note: '' })
 
+      // REA needs about 40 s before its tools are served, so the chip stays on
+      // and the host reports `mounted` once the manager reaches `connected`.
+      // If the host withdraws the server instead (an unclean close), it writes
+      // the state back to off and this flips the label with the reason.
+      const followMount = async () => {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          await new Promise(resolve => setTimeout(resolve, 3000))
+          const payload = await request(STATUS_PATH).catch(() => null)
+          if (payload === null || payload.ok !== true) continue
+          if (payload.enabled !== true) {
+            setView(v => ({ ...v, enabled: false, busy: false, known: true, note: payload.error || '' }))
+            return
+          }
+          if (payload.mounted === true) {
+            setView(v => ({ ...v, busy: false, note: '' }))
+            return
+          }
+        }
+        setView(v => ({ ...v, busy: false }))
+      }
+
       React.useEffect(() => {
         let live = true
         readStatus(4)
           .then(payload => {
             if (!live) return
-            if (payload.ok === true) setView(v => ({ ...v, enabled: payload.enabled === true, known: true, note: payload.error || '' }))
-            else setView(v => ({ ...v, known: false, note: payload.error || 'status read failed' }))
+            if (payload.ok === true) {
+              setView(v => ({ ...v, enabled: payload.enabled === true, known: true, note: payload.error || '' }))
+              if (payload.enabled === true && payload.mounted !== true) void followMount()
+            } else setView(v => ({ ...v, known: false, note: payload.error || 'status read failed' }))
           })
         return () => { live = false }
       }, [])
@@ -83,6 +106,7 @@ window.__ModuleLoader__.load({
           if (refreshed.ok === true) {
             setView(v => ({ ...v, enabled: refreshed.enabled === true, known: true }))
           }
+          if (payload.enabled === true) void followMount()
         } catch (error) {
           setView(v => ({ ...v, enabled: !target, busy: false, note: error.message || String(error) }))
         }
