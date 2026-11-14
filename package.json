@@ -1,6 +1,6 @@
 {
   "name": "dsh-rea-pro",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Mount REA's reverse-engineering toolset as MCP tools in DeepSeek Harness, with a composer chip that switches it on for the sessions that need it (off after install).",
   "type": "module",
   "license": "MIT",

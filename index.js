@@ -144,10 +144,14 @@ export function apply(ctx, config = {}) {
       cwd: located.root,
       toolCallTimeoutMs: 120000,
       startupTimeoutMs: 30000,
-      // REA's server needs longer than the 5 s default to confirm a clean
-      // exit; a short budget makes the manager retain an incomplete-cleanup
-      // record and refuse every later mount.
-      closeTimeoutMs: 20000,
+      // A close that races REA's own start-up (an initialize still in flight
+      // while the child is loading its 255 tools) can exceed the manager's
+      // default budget; the manager then keeps an incomplete-cleanup record
+      // and refuses every later mount until the Host restarts. The child
+      // itself exits in milliseconds once it is idle, so a generous budget
+      // costs nothing in the normal path and keeps a slow exit from poisoning
+      // the switch.
+      closeTimeoutMs: 60000,
       reconnect: { enabled: true, initialDelayMs: 1000, maxDelayMs: 30000, maxAttempts: 10 },
     })
   }
@@ -165,18 +169,55 @@ export function apply(ctx, config = {}) {
     throw new Error('mcpManager 尚未就绪')
   }
   let managerStatus = () => undefined
-  let managerRestart = async () => {}
   const connectedState = () => managerStatus()?.status?.state === 'connected'
   const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms) })
 
-  /** Rebuild a stuck instance after a previous unclean close, then stop trying. */
-  const recoverIfStuck = async () => {
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      await sleep(3000)
-      if (!enabled || connectedState()) return
+  /** The switch only reads as on when the server actually reached `connected`. */
+  const CONNECT_BUDGET_MS = 45000
+  const READY_BUDGET_MS = 10000
+
+  const waitForReady = async (budgetMs) => {
+    const until = Date.now() + budgetMs
+    while (!ready && Date.now() < until) await sleep(200)
+    return ready
+  }
+
+  /**
+   * Watch the manager's own status until the server settles.
+   * @returns 'connected' | 'failed' | 'timeout'
+   */
+  const waitForOutcome = async (budgetMs) => {
+    const until = Date.now() + budgetMs
+    while (Date.now() < until) {
+      const state = managerStatus()?.status?.state
+      if (state === 'connected') return 'connected'
+      if (state === 'failed') return 'failed'
+      await sleep(500)
     }
-    if (!enabled) return
-    await managerRestart()
+    return 'timeout'
+  }
+
+  /**
+   * A manager record whose cleanup never settled cannot be remounted in this
+   * Host process; say that plainly instead of letting the chip pretend.
+   */
+  const explain = (status, fallback) => {
+    const reason = status?.reason
+    const detail = status?.result?.cleanupError ?? status?.lastError ?? fallback
+    if (reason === 'cleanup') return `这次关闭没有清理干净（${detail}）；重启 DSH 后可以再次挂载`
+    if (reason === 'load') return `REA 启动失败：${detail}`
+    return String(detail ?? 'REA 没有进入已连接状态')
+  }
+
+  const friendly = (error) => {
+    const message = String(error?.message ?? error)
+    if (message.includes('is incomplete; restart the Host')) {
+      return '上一次关闭没有清理干净，管理器拒绝再次挂载；重启 DSH 后点开即可'
+    }
+    if (message.includes('already configured or registered')) {
+      return '服务器名 "rea" 已被占用：检查 profile 里是否有另一条 rea-mcp 配置'
+    }
+    return message
   }
 
   // The manager's service is only reachable inside an inject frame, so the
@@ -190,23 +231,29 @@ export function apply(ctx, config = {}) {
         return undefined
       }
     }
-    managerRestart = async () => {
-      try {
-        await scope.mcpManager.restart(serverName)
-      } catch (error) {
-        lastError = String(error?.message ?? error)
-      }
-    }
     ready = true
-    void readState().then((on) => {
-      enabled = on
+    void readState().then(async (on) => {
       if (!on) return
       try {
         mount()
-        lastError = ''
       } catch (error) {
-        lastError = String(error?.message ?? error)
+        lastError = friendly(error)
+        enabled = false
+        await writeState(false)
+        return
       }
+      // A remembered "on" still has to prove it connected: a previous unclean
+      // close leaves the manager unable to mount, and the chip must not claim
+      // the tools are there when they are not.
+      if (await waitForOutcome(CONNECT_BUDGET_MS) === 'connected') {
+        enabled = true
+        lastError = ''
+        return
+      }
+      lastError = explain(managerStatus()?.status)
+      enabled = false
+      unmount()
+      await writeState(false)
     })
   })
 
@@ -229,7 +276,10 @@ export function apply(ctx, config = {}) {
       sendJson(response, 200, {
         ok: true,
         enabled,
-        mounted: dispose !== null,
+        // `mounted` now means the tools are really attached: registered but
+        // still connecting (or failed) is not a mounted server.
+        mounted: dispose !== null && connectedState(),
+        registered: dispose !== null,
         serverName,
         script: basename(located.script),
         server: managerStatus(),
@@ -252,26 +302,63 @@ export function apply(ctx, config = {}) {
       }
       const next = body.enabled === true
       try {
-        if (next) mount()
-        else unmount()
-        enabled = next
-        await writeState(next)
+        if (next) {
+          if (located === undefined) throw new Error(lastError !== '' ? lastError : `${PACKAGE} 未安装`)
+          // A page load can land before the inject frame binds the manager.
+          if (!await waitForReady(READY_BUDGET_MS)) throw new Error('mcpManager 尚未就绪，稍后重试')
+          mount()
+          const outcome = await waitForOutcome(CONNECT_BUDGET_MS)
+          if (outcome !== 'connected') {
+            const message = explain(managerStatus()?.status)
+            // Withdraw the registration so this attempt does not leave a name
+            // behind that a later enable would collide with.
+            unmount()
+            enabled = false
+            await writeState(false)
+            lastError = message
+            sendJson(response, 200, {
+              ok: false,
+              error: message,
+              enabled,
+              mounted: false,
+              outcome: { application: 'failed', enabled },
+            })
+            return
+          }
+          enabled = true
+          await writeState(true)
+          lastError = ''
+          sendJson(response, 200, {
+            ok: true,
+            enabled,
+            mounted: true,
+            outcome: { application: 'applied', enabled },
+          })
+          return
+        }
+        unmount()
+        enabled = false
+        await writeState(false)
         lastError = ''
         sendJson(response, 200, {
           ok: true,
           enabled,
-          mounted: dispose !== null,
+          mounted: false,
           outcome: { application: 'applied', enabled },
         })
-        // A server that closed uncleanly keeps its instance in a failed state;
-        // a restart rebuilds it so the next enable is usable again.
-        if (next) void recoverIfStuck()
       } catch (error) {
-        const message = String(error?.message ?? error)
+        const message = friendly(error)
         lastError = message
+        enabled = false
+        try {
+          unmount()
+        } catch { /* keep the reported failure */ }
+        await writeState(false).catch(() => {})
         sendJson(response, 200, {
           ok: false,
           error: message,
+          enabled,
+          mounted: false,
           outcome: { application: 'failed', enabled },
         })
       }

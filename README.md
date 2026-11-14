@@ -35,7 +35,9 @@ dsh plugin --profile web add github:AcuteSZW/dsh-rea-pro
 
 chip 只有两个状态：`REA 开`、`REA 关`。关闭时 Host 侧注销服务器注册，MCP 子进程退出；开启时重新注册并拉起子进程，通常几秒内可用。
 
-REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeoutMs`）。预算太短时 DSH 会把该服务器记成"cleanup 未完成"，之后所有重新挂载都会被拒绝——所以这个值不要调小。
+REA 的子进程收尾较慢，插件给了 60 秒的关闭预算（`closeTimeoutMs`）。预算太短时 DSH 会把该服务器记成"cleanup 未完成"，之后所有重新挂载都会被拒绝——所以这个值不要调小。
+
+点开之后插件会等服务器真的进入 `connected`（最多 45 秒）才把 chip 留在 `REA 开`：没连上就退回 `REA 关`，原因写在 chip 的悬停提示里；如果提示"这次关闭没有清理干净"，说明 DSH 侧那条服务器记录已经卡死，重启一次 DSH 就能恢复。
 
 **新装默认关**：状态文件不存在时按"关"处理，装完第一次启动不会把 REA 的工具挂进会话，需要你在 chip 上点一下。点过之后状态存进 `~/.dsh/rea-mcp-state.json`，重启后保持。
 
@@ -63,7 +65,7 @@ REA 的子进程收尾较慢，插件给了 20 秒的关闭预算（`closeTimeou
 ## 排错
 
 - chip 点不动（停在 `REA 关`）：读不到状态。先确认插件已加载（**插件 → 已安装**里有 `dsh-rea-pro`），再看 Harness 启动日志。
-- chip 能点但工具没出现：多半是 `rea-agents` 没装进 profile，或 REA 自身启动失败；用 REA 的 `doctor` 检查（`npx rea-agents doctor`）。
+- chip 能点但工具没出现：先看 chip 的悬停提示——现在点开会核对服务器状态，没连上会自己退回 `REA 关` 并写明原因。提示"这次关闭没有清理干净"时，DSH 侧这条记录已卡死，重启 DSH 即可；其它情况多是 `rea-agents` 没装进 profile，或 REA 自身启动失败，用 REA 的 `doctor` 检查（`npx rea-agents doctor`）。
 - `pnpm install` 以 `ERR_PNPM_IGNORED_BUILDS` 退出、提示 `Ignored build scripts: frida`：这是 pnpm 拦下了 REA 依赖里 frida 的安装脚本，包本身已经装好、插件可用。要让 frida 相关能力也完整，在 profile 目录跑 `pnpm approve-builds` 选中 frida（或在 `pnpm-workspace.yaml` 的 `allowBuilds` 里加 `frida: true`）后重装、重启。
 - 工具数量和期望不一致：npm 版 `rea-agents` 的目录是 229 个工具（`doctor` 里的 `mcp_tools`）；用自己仓库完整构建出来的副本可能更多。插件只负责挂载，工具集由 REA 决定。
 - Windows 上 REA 报缺少原生模块：`rea-agents` 的发行包已带 Windows 原生件；若被裁剪，按 REA 文档重建 `native/windows`。
