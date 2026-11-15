@@ -14,6 +14,9 @@ dsh plugin --profile web add dsh-rea-pro
 
 装完重启 Harness 一次，输入框工具条上出现 `● REA 关`（新装默认关）。也可以在产品界面里装：**插件 → 安装**，来源填包名 `dsh-rea-pro`。
 
+> 从 DSH 源码跑（没有全局 `dsh` 命令）的话，把命令里的 `dsh` 换成 `pnpm dsh`，并在 DSH 仓库根目录执行：
+> `cd <dsh 仓库>` → `pnpm dsh plugin --profile web add dsh-rea-pro`。`dsh plugin` 本身就是把参数原样转发给 profile 目录里的 pnpm，两种写法等价。
+
 ### 走官方源 / 锁某个版本
 
 `dsh plugin` 的下载源跟随你本机 npm 配置。若 `npm config get registry` 指向镜像（例如 `registry.npmmirror.com`）而镜像还没同步到最新版，直接在 profile 里用 pnpm 从官方源装（和 `dsh plugin add` 等价，只是显式指定了源）：
