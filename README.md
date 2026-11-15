@@ -6,37 +6,43 @@ English: mounts [REA](https://github.com/morluto/rea)'s MCP server in DeepSeek H
 
 ## 安装（装 npm 上的最新版）
 
-插件已发布在 npm（[dsh-rea-pro](https://www.npmjs.com/package/dsh-rea-pro)）。装的时候显式带上官方源，避免镜像落后装到旧版：
+插件已发布在 npm（[dsh-rea-pro](https://www.npmjs.com/package/dsh-rea-pro)），直接装到 DSH 的 `web` profile，不需要 `dsh` 命令、也不用先切目录（`--dir` 指定目标，`--registry` 钉住官方源避免镜像落后装到旧版）。
+
+Windows：
 
 ```sh
-dsh plugin --profile web add dsh-rea-pro --registry=https://registry.npmjs.org
+pnpm --dir C:\Users\<用户名>\.dsh\profiles\web add dsh-rea-pro@latest --registry=https://registry.npmjs.org
 ```
 
-`dsh plugin` 会把后面的参数原样转发给 profile 目录里的 pnpm，所以 `--registry` 照样生效。
+macOS / Linux：
+
+```sh
+pnpm --dir ~/.dsh/profiles/web add dsh-rea-pro@latest --registry=https://registry.npmjs.org
+```
 
 装完重启 Harness 一次，输入框工具条上出现 `● REA 关`（新装默认关）。也可以在产品界面里装：**插件 → 安装**，来源填包名 `dsh-rea-pro`。
 
-> 不加 `--registry` 时，装到的版本取决于你本机 npm 配置的源（`npm config get registry`）。若它指向 `registry.npmmirror.com` 这类镜像而镜像还没同步到最新版，`add dsh-rea-pro` 会装到旧版——实测过：默认源是 npmmirror 的机器上装到了 `1.0.3`，而 npm 官方源已是 `1.0.4`。所以下面的核对步骤里，两条 `npm view` 也要分别比对。
->
-> 从 DSH 源码跑（没有全局 `dsh` 命令）的话，把命令里的 `dsh` 换成 `pnpm dsh`，并在 DSH 仓库根目录执行：
-> `cd <dsh 仓库>` → `pnpm dsh plugin --profile web add dsh-rea-pro --registry=https://registry.npmjs.org`。
+### 升级到最新版
 
-### 锁某个版本
-
-把包名写成 `dsh-rea-pro@1.0.4` 即可（同样建议带 `--registry`）。也可以在 profile 目录直接改：
+同一个包已经装过时，`@latest` **不会**把它顶上去：manifest 里写的是 `^1.0.3` 这类范围，pnpm 判定“已满足”，只重算依赖树，版本原地不动（实测：`add dsh-rea-pro@latest` 与 `update --latest` 都停在 `1.0.3`）。要真升级，写明确版本号：
 
 ```sh
-cd ~/.dsh/profiles/web
-pnpm add dsh-rea-pro@1.0.4 --registry=https://registry.npmjs.org
+pnpm --dir C:\Users\<用户名>\.dsh\profiles\web add dsh-rea-pro@1.0.4 --registry=https://registry.npmjs.org
 ```
 
-装完同样重启一次 Harness。
+或者一条命令先取官方源的最新版本号再装（cmd，写进 .bat 时把 `%v` 改成 `%%v`）：
+
+```bat
+for /f %v in ('npm view dsh-rea-pro version --registry=https://registry.npmjs.org') do pnpm --dir C:\Users\<用户名>\.dsh\profiles\web add dsh-rea-pro@%v --registry=https://registry.npmjs.org
+```
+
+> 升级后如果 chip 消失、`/dsh-rea/status` 变成 404，说明插件在 profile 的 `dsh.profile.bundles` 里没有登记激活项（裸 `pnpm add` 只改依赖，不动激活列表）。用 `dsh plugin --profile web remove dsh-rea-pro` 再 `add` 一次即可重新登记，然后重启 Harness。
 
 ### 核对装到的是哪一版
 
 ```sh
-npm view dsh-rea-pro version --registry=https://registry.npmjs.org   # 官方源最新版
-cd ~/.dsh/profiles/web; pnpm list dsh-rea-pro                        # profile 里实际装的版本
+npm view dsh-rea-pro version --registry=https://registry.npmjs.org          # 官方源最新版
+pnpm --dir C:\Users\<用户名>\.dsh\profiles\web list dsh-rea-pro --depth 0    # profile 里实际装的版本
 ```
 
 两者一致即为最新版。也可以直接看 `~/.dsh/profiles/web/node_modules/dsh-rea-pro/package.json` 里的 `version`，或 `~/.dsh/profiles/web/node_modules/dsh-rea-pro/index.js` 是否含 `waitForReady` / `startWatcher`（1.0.4 起才有）。
