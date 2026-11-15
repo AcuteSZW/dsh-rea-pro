@@ -6,36 +6,40 @@ English: mounts [REA](https://github.com/morluto/rea)'s MCP server in DeepSeek H
 
 ## 安装（装 npm 上的最新版）
 
-插件已发布在 npm（[dsh-rea-pro](https://www.npmjs.com/package/dsh-rea-pro)），默认装到的就是 registry 上的 `latest`：
+插件已发布在 npm（[dsh-rea-pro](https://www.npmjs.com/package/dsh-rea-pro)）。装的时候显式带上官方源，避免镜像落后装到旧版：
 
 ```sh
-dsh plugin --profile web add dsh-rea-pro
+dsh plugin --profile web add dsh-rea-pro --registry=https://registry.npmjs.org
 ```
+
+`dsh plugin` 会把后面的参数原样转发给 profile 目录里的 pnpm，所以 `--registry` 照样生效。
 
 装完重启 Harness 一次，输入框工具条上出现 `● REA 关`（新装默认关）。也可以在产品界面里装：**插件 → 安装**，来源填包名 `dsh-rea-pro`。
 
+> 不加 `--registry` 时，装到的版本取决于你本机 npm 配置的源（`npm config get registry`）。若它指向 `registry.npmmirror.com` 这类镜像而镜像还没同步到最新版，`add dsh-rea-pro` 会装到旧版——实测过：默认源是 npmmirror 的机器上装到了 `1.0.3`，而 npm 官方源已是 `1.0.4`。所以下面的核对步骤里，两条 `npm view` 也要分别比对。
+>
 > 从 DSH 源码跑（没有全局 `dsh` 命令）的话，把命令里的 `dsh` 换成 `pnpm dsh`，并在 DSH 仓库根目录执行：
-> `cd <dsh 仓库>` → `pnpm dsh plugin --profile web add dsh-rea-pro`。`dsh plugin` 本身就是把参数原样转发给 profile 目录里的 pnpm，两种写法等价。
+> `cd <dsh 仓库>` → `pnpm dsh plugin --profile web add dsh-rea-pro --registry=https://registry.npmjs.org`。
 
-### 走官方源 / 锁某个版本
+### 锁某个版本
 
-`dsh plugin` 的下载源跟随你本机 npm 配置。若 `npm config get registry` 指向镜像（例如 `registry.npmmirror.com`）而镜像还没同步到最新版，直接在 profile 里用 pnpm 从官方源装（和 `dsh plugin add` 等价，只是显式指定了源）：
+把包名写成 `dsh-rea-pro@1.0.4` 即可（同样建议带 `--registry`）。也可以在 profile 目录直接改：
 
 ```sh
 cd ~/.dsh/profiles/web
-pnpm add dsh-rea-pro@latest --registry=https://registry.npmjs.org
+pnpm add dsh-rea-pro@1.0.4 --registry=https://registry.npmjs.org
 ```
 
-只想要某一版，把 `@latest` 换成具体版本号即可，例如 `dsh-rea-pro@1.0.4`。装完同样重启一次 Harness。
+装完同样重启一次 Harness。
 
 ### 核对装到的是哪一版
 
 ```sh
-npm view dsh-rea-pro version          # registry 上的最新版
-cd ~/.dsh/profiles/web; pnpm list dsh-rea-pro   # profile 里实际装的版本
+npm view dsh-rea-pro version --registry=https://registry.npmjs.org   # 官方源最新版
+cd ~/.dsh/profiles/web; pnpm list dsh-rea-pro                        # profile 里实际装的版本
 ```
 
-两者一致即为最新版。也可以看 `~/.dsh/profiles/web/node_modules/dsh-rea-pro/package.json` 里的 `version`。
+两者一致即为最新版。也可以直接看 `~/.dsh/profiles/web/node_modules/dsh-rea-pro/package.json` 里的 `version`，或 `~/.dsh/profiles/web/node_modules/dsh-rea-pro/index.js` 是否含 `waitForReady` / `startWatcher`（1.0.4 起才有）。
 
 ### 兜底：直连 GitHub
 
