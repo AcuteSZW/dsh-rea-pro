@@ -4,19 +4,43 @@ REA 的逆向工具集接入 [DeepSeek Harness](https://github.com/deepseek-ai/d
 
 English: mounts [REA](https://github.com/morluto/rea)'s MCP server in DeepSeek Harness and adds a composer chip to switch it on for the sessions that need it; it starts off after install.
 
-## 安装
+## 安装（装 npm 上的最新版）
+
+插件已发布在 npm（[dsh-rea-pro](https://www.npmjs.com/package/dsh-rea-pro)），默认装到的就是 registry 上的 `latest`：
 
 ```sh
 dsh plugin --profile web add dsh-rea-pro
 ```
 
-包还没发到 npm 之前，也可以直接从 GitHub 装：
+装完重启 Harness 一次，输入框工具条上出现 `● REA 关`（新装默认关）。也可以在产品界面里装：**插件 → 安装**，来源填包名 `dsh-rea-pro`。
+
+### 走官方源 / 锁某个版本
+
+`dsh plugin` 的下载源跟随你本机 npm 配置。若 `npm config get registry` 指向镜像（例如 `registry.npmmirror.com`）而镜像还没同步到最新版，直接在 profile 里用 pnpm 从官方源装（和 `dsh plugin add` 等价，只是显式指定了源）：
+
+```sh
+cd ~/.dsh/profiles/web
+pnpm add dsh-rea-pro@latest --registry=https://registry.npmjs.org
+```
+
+只想要某一版，把 `@latest` 换成具体版本号即可，例如 `dsh-rea-pro@1.0.4`。装完同样重启一次 Harness。
+
+### 核对装到的是哪一版
+
+```sh
+npm view dsh-rea-pro version          # registry 上的最新版
+cd ~/.dsh/profiles/web; pnpm list dsh-rea-pro   # profile 里实际装的版本
+```
+
+两者一致即为最新版。也可以看 `~/.dsh/profiles/web/node_modules/dsh-rea-pro/package.json` 里的 `version`。
+
+### 兜底：直连 GitHub
+
+npm 装不通时（网络或镜像问题），退回到仓库装，内容同最新 tag：
 
 ```sh
 dsh plugin --profile web add github:AcuteSZW/dsh-rea-pro
 ```
-
-两种装法等价：装完重启 Harness 一次，工具条上会出现 `● REA 关`。也可以在产品界面里装：**插件 → 安装**，来源填包名或仓库地址。新装默认是关的，要用的时候点一下。
 
 ## 它能做什么
 
@@ -27,7 +51,7 @@ dsh plugin --profile web add github:AcuteSZW/dsh-rea-pro
 ## 依赖
 
 - DSH `>= 0.2.1`，且 profile 里挂了 `@deepseek-ai/dsh-web-app`（`mcp-manager` 由它提供）。
-- [rea-agents](https://www.npmjs.com/package/rea-agents) `^6.8.0`：**第三方 npm 包**，作为本插件的依赖自动安装，不需要单独部署 REA 仓库。会话里那些工具就是它提供的（npm 发行版 `6.8.0` 的目录是 229 个工具），插件只负责把它挂进 DSH。
+- [rea-agents](https://www.npmjs.com/package/rea-agents) `^6.8.0`：**第三方 npm 包**，作为本插件的依赖自动安装，不需要单独部署 REA 仓库。会话里那些工具就是它提供的（当前发行版 `6.9.0` 的目录是 255 个工具，`6.8.0` 是 229 个），插件只负责把它挂进 DSH。
 
 插件不安装或升级 Node、npm、分析引擎；REA 自己的 provider（Ghidra / IDA / JADX / Kuna 等）按 REA 文档配置，插件不代劳。
 
@@ -67,7 +91,7 @@ REA 的子进程收尾较慢，插件给了 60 秒的关闭预算（`closeTimeou
 - chip 点不动（停在 `REA 关`）：读不到状态。先确认插件已加载（**插件 → 已安装**里有 `dsh-rea-pro`），再看 Harness 启动日志。
 - chip 能点但工具没出现：点开后 REA 要 40–60 秒才连上，等一会儿再看；chip 若自动退回 `REA 关`，悬停提示会写明原因。提示"这次关闭没有清理干净"时，DSH 侧这条记录已卡死，重启 DSH 即可；其它情况多是 `rea-agents` 没装进 profile，或 REA 自身启动失败，用 REA 的 `doctor` 检查（`npx rea-agents doctor`）。
 - `pnpm install` 以 `ERR_PNPM_IGNORED_BUILDS` 退出、提示 `Ignored build scripts: frida`：这是 pnpm 拦下了 REA 依赖里 frida 的安装脚本，包本身已经装好、插件可用。要让 frida 相关能力也完整，在 profile 目录跑 `pnpm approve-builds` 选中 frida（或在 `pnpm-workspace.yaml` 的 `allowBuilds` 里加 `frida: true`）后重装、重启。
-- 工具数量和期望不一致：npm 版 `rea-agents` 的目录是 229 个工具（`doctor` 里的 `mcp_tools`）；用自己仓库完整构建出来的副本可能更多。插件只负责挂载，工具集由 REA 决定。
+- 工具数量和期望不一致：以 profile 里实际装的 `rea-agents` 版本为准，`doctor` 的 `mcp_tools` 会写清楚（`6.8.0` 是 229 个，`6.9.0` 是 255 个）；用自己仓库完整构建出来的副本可能更多。插件只负责挂载，工具集由 REA 决定。
 - Windows 上 REA 报缺少原生模块：`rea-agents` 的发行包已带 Windows 原生件；若被裁剪，按 REA 文档重建 `native/windows`。
 
 ## 卸载
