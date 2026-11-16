@@ -149,6 +149,10 @@ chip 只有两个状态：`REA 开`、`REA 关`；挂载过程中显示 `正在�
 - 工具数量和期望不一致：以 profile 里实际装的 `rea-agents` 版本为准，`doctor` 的 `mcp_tools` 会写清楚（`6.8.0` 是 229 个，`6.9.0` 是 255 个）；用自己仓库完整构建出来的副本可能更多。插件只负责挂载，工具集由 REA 决定；`tools: core` 时是 148 个（按 family 计）。
 - Windows 上 REA 报缺少原生模块：`rea-agents` 的发行包已带 Windows 原生件；若被裁剪，按 REA 文档重建 `native/windows`。
 
+## 交流与反馈
+
+社区 QQ 群：**897697295**。装不上、挂载卡住、工具数量和期望不一致，都可以在群里说；能附上 `/dsh-rea/status` 的返回和 `DSH_REA_DEBUG=1` 的日志最快。
+
 ## 卸载
 
 ```sh
