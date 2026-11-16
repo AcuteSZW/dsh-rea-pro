@@ -153,6 +153,8 @@ chip 只有两个状态：`REA 开`、`REA 关`；挂载过程中显示 `正在�
 
 社区 QQ 群：**897697295**。装不上、挂载卡住、工具数量和期望不一致，都可以在群里说；能附上 `/dsh-rea/status` 的返回和 `DSH_REA_DEBUG=1` 的日志最快。
 
+<img src="https://raw.githubusercontent.com/AcuteSZW/dsh-rea-pro/main/docs/qq-group-897697295.png" alt="社区 QQ 群 897697295 二维码" width="260">
+
 ## 卸载
 
 ```sh
