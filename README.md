@@ -155,6 +155,10 @@ chip 只有两个状态：`REA 开`、`REA 关`；挂载过程中显示 `正在�
 
 <img src="https://raw.githubusercontent.com/AcuteSZW/dsh-rea-pro/main/docs/qq-group-897697295.png" alt="社区 QQ 群 897697295 二维码" width="260">
 
+Telegram 群：**https://t.me/+yFs21xsIdXs4Yjdl**
+
+<img src="https://raw.githubusercontent.com/AcuteSZW/dsh-rea-pro/main/docs/telegram-group.png" alt="Telegram 群二维码" width="260">
+
 ## 卸载
 
 ```sh
